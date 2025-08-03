@@ -4,6 +4,16 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	server: {
+    watch: {
+      ignored: ['**/vite.config.ts'],
+	  usePolling: true,
+      interval: 100
+    },
+    host: '0.0.0.0',
+    port: 3000,
+    strictPort: true,
+  },
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
