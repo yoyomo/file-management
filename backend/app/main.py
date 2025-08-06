@@ -41,6 +41,9 @@ except ClientError:
 
 @api.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
+    if files_collection.find_one({"filename": file.filename}):
+        raise HTTPException(status_code=400, detail="File with this filename already exists.")
+
     try:
         s3.upload_fileobj(file.file, BUCKET_NAME, file.filename)
         file.file.seek(0, os.SEEK_END)
