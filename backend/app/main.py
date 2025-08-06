@@ -90,9 +90,21 @@ def rename_file(file_id: str, data: dict = Body(...)):
     if file_doc["filename"] == new_name:
         return {"message": "Filename is already set to this value"}
 
+    # Rename object in MinIO
+    try:
+        s3.copy_object(
+            Bucket=BUCKET_NAME,
+            CopySource=f"{BUCKET_NAME}/{file_doc['filename']}",
+            Key=new_name
+        )
+        s3.delete_object(Bucket=BUCKET_NAME, Key=file_doc["filename"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MinIO rename failed: {e}")
+
+    # Rename object in DB
     files_collection.update_one(
         {"_id": ObjectId(file_id)},
-        {"$set": {"filename": new_name}}
+        {"$set": {"filename": new_name, "s3_path": f"{BUCKET_NAME}/{new_name}"}}
     )
 
     return {"message": "Renamed"}
