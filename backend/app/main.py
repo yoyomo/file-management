@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import boto3
 from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
@@ -42,15 +43,29 @@ except ClientError:
 async def upload_file(file: UploadFile = File(...)):
     try:
         s3.upload_fileobj(file.file, BUCKET_NAME, file.filename)
+        file.file.seek(0, os.SEEK_END)
+        size = file.file.tell()
+        file.file.seek(0)  # Reset pointer
 
         files_collection.insert_one({
             "filename": file.filename,
             "s3_path": f"{BUCKET_NAME}/{file.filename}",
-            "content_type": file.content_type
+            "content_type": file.content_type,
+            "upload_date": datetime.now(datetime.timezone.utc),
+            "size": size
         })
 
         return {"message": "Upload successful", "file": file.filename}
     except (BotoCoreError, ClientError) as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@api.get("/files")
+def list_files():
+    files = list(files_collection.find({}))
+    for file in files:
+        file["_id"] = str(file["_id"])
+        if isinstance(file.get("upload_date"), datetime):
+            file["upload_date"] = file["upload_date"].isoformat()
+    return files
     
 app.include_router(api)

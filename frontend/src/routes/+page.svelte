@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PUBLIC_API_URL } from '$env/static/public';
+	import { PUBLIC_API_URL } from '$env/static/public';
 	const API_BASE = `${PUBLIC_API_URL}/api/v1`;
 
 	const ACCEPTED_TYPES = [
@@ -16,7 +16,6 @@
 	let dragOver = false;
 	let selectedFile: File | null = null;
 	let message: { type: string; text: string } | null = null;
-	let uploading = false;
 
 	const uploadFile = async (file: File) => {
 		if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -27,7 +26,6 @@
 		const formData = new FormData();
 		formData.append('file', file);
 
-		uploading = true;
 		message = { type: 'info', text: 'Uploading...' };
 
 		try {
@@ -40,8 +38,6 @@
 		} catch (err) {
 			message = { type: 'error', text: 'Upload failed.' };
 			console.error(err);
-		} finally {
-			uploading = false;
 		}
 	};
 
@@ -63,6 +59,23 @@
 			await uploadFile(file);
 		}
 	};
+
+	import { onMount } from 'svelte';
+
+	type FileMeta = {
+		_id: string;
+		filename: string;
+		s3_path: string;
+		content_type: string;
+		upload_date: string;
+	};
+
+	let files: FileMeta[] = [];
+
+	onMount(async () => {
+		const res = await fetch(`${API_BASE}/files`);
+		files = await res.json();
+	});
 </script>
 
 <div class="p-6">
@@ -95,5 +108,28 @@
 		>
 			{message.text}
 		</p>
+	{/if}
+
+	{#if files.length}
+		<table class="mt-6 w-full table-auto border border-gray-200">
+			<thead class="bg-gray-100 text-left">
+				<tr>
+					<th class="p-2">Filename</th>
+					<th class="p-2">Type</th>
+					<th class="p-2">Upload Date</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each files as file}
+					<tr class="border-t">
+						<td class="p-2">{file.filename}</td>
+						<td class="p-2">{file.content_type}</td>
+						<td class="p-2">{file.upload_date?.slice(0, 19).replace('T', ' ')}</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{:else}
+		<p class="mt-4 text-sm text-gray-500">No files uploaded yet.</p>
 	{/if}
 </div>
