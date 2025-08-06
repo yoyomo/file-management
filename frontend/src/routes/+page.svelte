@@ -110,27 +110,44 @@
 			message = { type: 'error', text: 'Download failed.' };
 		}
 	};
+
+	let fileInput: HTMLInputElement;
 </script>
 
 <div class="p-6">
 	<h1 class="mb-4 text-center text-2xl font-bold">File Upload</h1>
-	<div
-		role="region"
-		class="cursor-pointer rounded-md border-2 border-dashed border-gray-400 p-6 text-center {dragOver
+	<button
+		type="button"
+		tabindex="0"
+		class="w-full cursor-pointer rounded-md border-2 border-dashed border-gray-400 p-6 text-center {dragOver
 			? 'bg-gray-100'
 			: ''}"
 		on:dragover|preventDefault={() => (dragOver = true)}
 		on:dragleave={() => (dragOver = false)}
 		on:drop={handleDrop}
+		on:click={() => fileInput.click()}
+		on:keydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				fileInput.click();
+			}
+		}}
+		style="user-select: none;"
 	>
 		<p>Drag & drop a file here</p>
 		<p>or</p>
 		<input
+			bind:this={fileInput}
 			type="file"
 			accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp4,.mov"
 			on:change={handleFileChange}
+			style="display: none;"
 		/>
-	</div>
+		<span
+			class="mt-2 inline-block rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600"
+		>
+			Browse
+		</span>
+	</button>
 
 	{#if message}
 		<p
@@ -171,7 +188,8 @@
 						<td class="p-2">{file.upload_date?.slice(0, 19).replace('T', ' ')}</td>
 						<td class="p-2">
 							<button
-								class="text-red-600 hover:underline"
+								class="mt-2 cursor-pointer inline-block rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"
+
 								on:click={() => {
 									if (confirm(`Delete ${file.filename}?`)) {
 										deleteFile(file._id);
@@ -180,7 +198,10 @@
 							>
 								Delete
 							</button>
-							<button class="text-blue-600 hover:underline" on:click={() => downloadFile(file._id)}>
+							<button
+								class="mt-2 cursor-pointer inline-block rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
+								on:click={() => downloadFile(file._id)}
+							>
 								Download
 							</button>
 						</td>
