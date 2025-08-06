@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import boto3
-from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
+from bson import ObjectId
+from fastapi import APIRouter, Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from botocore.exceptions import BotoCoreError, ClientError
 from pymongo import MongoClient
@@ -10,10 +11,9 @@ app = FastAPI()
 
 api = APIRouter(prefix="/api/v1")
 
-# CORS: allow frontend to talk to backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict to "http://localhost:3000"
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,6 +23,7 @@ app.add_middleware(
 mongo_client = MongoClient(os.environ.get("MONGO_URL"))
 db = mongo_client["filedb"]
 files_collection = db["files"]
+files_collection.create_index("filename", unique=True)
 
 # MinIO (S3-compatible) setup
 s3 = boto3.client(
@@ -39,26 +40,30 @@ try:
 except ClientError:
     s3.create_bucket(Bucket=BUCKET_NAME)
 
+
 @api.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+def upload_file(file: UploadFile = File(...)):
     if files_collection.find_one({"filename": file.filename}):
         raise HTTPException(status_code=400, detail="File with this filename already exists.")
 
     try:
-        s3.upload_fileobj(file.file, BUCKET_NAME, file.filename)
         file.file.seek(0, os.SEEK_END)
         size = file.file.tell()
-        file.file.seek(0)  # Reset pointer
+        file.file.seek(0)
 
-        files_collection.insert_one({
+        s3.upload_fileobj(file.file, BUCKET_NAME, file.filename)
+
+        doc = {
             "filename": file.filename,
             "s3_path": f"{BUCKET_NAME}/{file.filename}",
             "content_type": file.content_type,
-            "upload_date": datetime.now(datetime.timezone.utc),
+            "upload_date": datetime.now(timezone.utc),
             "size": size
-        })
-
-        return {"message": "Upload successful", "file": file.filename}
+        }
+        result = files_collection.insert_one(doc)
+        doc["_id"] = str(result.inserted_id)
+        doc["upload_date"] = doc["upload_date"].isoformat()
+        return doc
     except (BotoCoreError, ClientError) as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -71,4 +76,52 @@ def list_files():
             file["upload_date"] = file["upload_date"].isoformat()
     return files
     
+
+@api.patch("/files/{file_id}")
+def rename_file(file_id: str, data: dict = Body(...)):
+    new_name = data.get("filename")
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New filename required")
+
+    file_doc = files_collection.find_one({"_id": ObjectId(file_id)})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file_doc["filename"] == new_name:
+        return {"message": "Filename is already set to this value"}
+
+    files_collection.update_one(
+        {"_id": ObjectId(file_id)},
+        {"$set": {"filename": new_name}}
+    )
+
+    return {"message": "Renamed"}
+
+@api.delete("/files/{file_id}")
+def delete_file(file_id: str):
+    file = files_collection.find_one({"_id": ObjectId(file_id)})
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        s3.delete_object(Bucket=BUCKET_NAME, Key=file["filename"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    files_collection.delete_one({"_id": ObjectId(file_id)})
+    return {"message": "Deleted"}
+
+@api.get("/files/{file_id}/download")
+def download_file(file_id: str):
+    file = files_collection.find_one({"_id": ObjectId(file_id)})
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    url = s3.generate_presigned_url(
+        ClientMethod='get_object',
+        Params={'Bucket': BUCKET_NAME, 'Key': file["filename"]},
+        ExpiresIn=60
+    )
+    return {"url": url}
+
 app.include_router(api)
