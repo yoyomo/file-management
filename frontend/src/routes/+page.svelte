@@ -112,6 +112,15 @@
 	};
 
 	let fileInput: HTMLInputElement;
+
+	const humanFileSize = (bytes: number, decimals = 1) => {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const dm = decimals < 0 ? 0 : decimals;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+	};
 </script>
 
 <div class="p-6">
@@ -142,9 +151,7 @@
 			on:change={handleFileChange}
 			style="display: none;"
 		/>
-		<span
-			class="mt-2 inline-block rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600"
-		>
+		<span class="mt-2 inline-block rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600">
 			Browse
 		</span>
 	</button>
@@ -183,13 +190,12 @@
 								on:change={() => renameFile(file)}
 							/></td
 						>
-						<td class="p-2">{file.size}</td>
+						<td class="p-2">{humanFileSize(file.size)}</td>
 						<td class="p-2">{file.content_type}</td>
 						<td class="p-2">{file.upload_date?.slice(0, 19).replace('T', ' ')}</td>
 						<td class="p-2">
 							<button
-								class="mt-2 cursor-pointer inline-block rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"
-
+								class="mt-2 inline-block cursor-pointer rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"
 								on:click={() => {
 									if (confirm(`Delete ${file.filename}?`)) {
 										deleteFile(file._id);
@@ -199,7 +205,7 @@
 								Delete
 							</button>
 							<button
-								class="mt-2 cursor-pointer inline-block rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
+								class="mt-2 inline-block cursor-pointer rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
 								on:click={() => downloadFile(file._id)}
 							>
 								Download
